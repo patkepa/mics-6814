@@ -130,6 +130,11 @@ pub(crate) fn curve_for(gas: Gas) -> &'static [(f32, f32)] {
 /// near the baseline), the function returns `OutOfRange`. Callers should
 /// handle this — a common pattern is to clamp to 0 ppm when the ratio
 /// indicates cleaner-than-calibration air.
+///
+/// # Errors
+///
+/// Returns [`Error::OutOfRange`] if `rs_r0` is zero, negative, or outside the
+/// calibration curve bounds for the requested gas.
 pub fn rs_r0_to_ppm(gas: Gas, rs_r0: f32) -> Result<f32, Error> {
     if rs_r0 <= 0.0 {
         return Err(Error::OutOfRange);
@@ -146,25 +151,14 @@ pub fn rs_r0_to_ppm(gas: Gas, rs_r0: f32) -> Result<f32, Error> {
 
     let is_increasing = gas == Gas::NitrogenDioxide;
 
-    // Build sorted-by-rs_r0 pairs
-    // We need to sort by the y-value (log10_rs_r0) to use as x for inverse lookup.
-    // Since the curves are monotonic, we can reverse or keep order.
-    let mut inverted: [Option<(f32, f32)>; 8] = [None; 8];
+    // Invert the curve: (log10_rs_r0, log10_ppm), sorted ascending by log10_rs_r0.
+    // Since the curves are monotonic, reversing gives ascending order for
+    // RED/NH3 sensors (where Rs/R0 decreases with concentration).
     let len = curve.len();
-    for i in 0..len {
-        if is_increasing {
-            // rs_r0 increases with ppm — already sorted ascending by log_rs
-            inverted[i] = Some((curve[i].1, curve[i].0));
-        } else {
-            // rs_r0 decreases with ppm — reverse to get ascending log_rs
-            inverted[i] = Some((curve[len - 1 - i].1, curve[len - 1 - i].0));
-        }
-    }
-
-    // Collect into a fixed-size buffer for interpolation
     let mut buf: [(f32, f32); 8] = [(0.0, 0.0); 8];
-    for i in 0..len {
-        buf[i] = inverted[i].unwrap();
+    for (i, slot) in buf.iter_mut().enumerate().take(len) {
+        let j = if is_increasing { i } else { len - 1 - i };
+        *slot = (curve[j].1, curve[j].0);
     }
 
     interpolate_sorted(&buf[..len], log_ratio).map(|log_ppm| powf(10.0, log_ppm))

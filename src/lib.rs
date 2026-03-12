@@ -45,6 +45,11 @@ pub struct GasReading {
 /// - `v_cc` — supply voltage (volts), typically 3.3 or 5.0
 /// - `r_load` — load resistor value in ohms (minimum 820 Ω per datasheet)
 /// - `r0` — baseline resistance in clean air (ohms), obtained during calibration
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidVoltage`] if `v_adc` is zero, negative, or >= `v_cc`.
+/// Returns [`Error::InvalidLoadResistance`] if `r_load` or `r0` is zero or negative.
 pub fn voltage_to_rs_r0(v_adc: f32, v_cc: f32, r_load: f32, r0: f32) -> Result<f32, Error> {
     if v_adc <= 0.0 || v_adc >= v_cc {
         return Err(Error::InvalidVoltage);
@@ -60,6 +65,11 @@ pub fn voltage_to_rs_r0(v_adc: f32, v_cc: f32, r_load: f32, r0: f32) -> Result<f
 ///
 /// The `reading` must contain the Rs/R0 ratio for the correct channel
 /// (determined by `gas.channel()`).
+///
+/// # Errors
+///
+/// Returns [`Error::OutOfRange`] if the Rs/R0 ratio for the gas's channel is
+/// outside the calibration curve bounds.
 pub fn measure(reading: &ChannelReading, gas: Gas) -> Result<GasReading, Error> {
     let rs_r0 = match gas.channel() {
         Channel::Red => reading.red,

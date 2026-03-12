@@ -34,16 +34,17 @@ pub enum Gas {
 
 impl Gas {
     /// Returns which sensor channel this gas is measured on.
+    #[must_use]
     pub fn channel(self) -> Channel {
         match self {
-            Gas::CarbonMonoxide => Channel::Red,
             Gas::NitrogenDioxide => Channel::Ox,
             Gas::Ammonia => Channel::Nh3,
-            Gas::Ethanol => Channel::Red,
-            Gas::Hydrogen => Channel::Red,
-            Gas::Methane => Channel::Red,
-            Gas::Propane => Channel::Red,
-            Gas::Isobutane => Channel::Red,
+            Gas::CarbonMonoxide
+            | Gas::Ethanol
+            | Gas::Hydrogen
+            | Gas::Methane
+            | Gas::Propane
+            | Gas::Isobutane => Channel::Red,
         }
     }
 }
