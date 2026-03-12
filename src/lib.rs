@@ -35,21 +35,24 @@ pub struct GasReading {
 
 /// Convert an ADC voltage reading to an Rs/R0 ratio.
 ///
-/// Uses the voltage divider equation: `Rs = Rload * (Vcc - Vadc) / Vadc`
+/// Assumes the datasheet reference circuit (page 3): load resistor on the high
+/// side (VCC → Rload → ADC pin → Rs → GND), giving:
+///
+/// `Rs = Rload * Vadc / (Vcc - Vadc)`
 ///
 /// # Arguments
 /// - `v_adc` — measured voltage at the ADC pin (volts)
 /// - `v_cc` — supply voltage (volts), typically 3.3 or 5.0
-/// - `r_load` — load resistor value in ohms
+/// - `r_load` — load resistor value in ohms (minimum 820 Ω per datasheet)
 /// - `r0` — baseline resistance in clean air (ohms), obtained during calibration
 pub fn voltage_to_rs_r0(v_adc: f32, v_cc: f32, r_load: f32, r0: f32) -> Result<f32, Error> {
-    if v_adc <= 0.0 || v_adc > v_cc {
+    if v_adc <= 0.0 || v_adc >= v_cc {
         return Err(Error::InvalidVoltage);
     }
     if r_load <= 0.0 || r0 <= 0.0 {
         return Err(Error::InvalidLoadResistance);
     }
-    let rs = r_load * (v_cc - v_adc) / v_adc;
+    let rs = r_load * v_adc / (v_cc - v_adc);
     Ok(rs / r0)
 }
 
@@ -73,6 +76,7 @@ mod tests {
 
     #[test]
     fn test_voltage_to_rs_r0() {
+        // Midpoint voltage → Rs = Rload → ratio = Rload/R0 = 1.0
         let ratio = voltage_to_rs_r0(1.65, 3.3, 10_000.0, 10_000.0).unwrap();
         assert!((ratio - 1.0).abs() < 0.01, "expected 1.0, got {ratio}");
     }
@@ -84,6 +88,13 @@ mod tests {
     }
 
     #[test]
+    fn test_voltage_equals_vcc() {
+        // Vadc = Vcc means denominator is zero — reject
+        let result = voltage_to_rs_r0(3.3, 3.3, 10_000.0, 10_000.0);
+        assert_eq!(result, Err(Error::InvalidVoltage));
+    }
+
+    #[test]
     fn test_voltage_exceeds_vcc() {
         let result = voltage_to_rs_r0(3.5, 3.3, 10_000.0, 10_000.0);
         assert_eq!(result, Err(Error::InvalidVoltage));
@@ -91,9 +102,13 @@ mod tests {
 
     #[test]
     fn test_full_pipeline_co() {
-        // Simulate: Vcc=3.3V, Rload=56kΩ, R0_red=500kΩ
-        // Vadc such that Rs/R0 = 0.25 → ~100 ppm CO
-        let v_adc = 3.3 * 56_000.0 / (125_000.0 + 56_000.0);
+        // Datasheet circuit: VCC → Rload → ADC → Rs → GND
+        // Vadc = Vcc * Rs / (Rload + Rs)
+        // Want Rs/R0 = 0.25 with R0=500kΩ → Rs = 125kΩ
+        // Rload = 56kΩ, Vcc = 3.3V
+        // Vadc = 3.3 * 125000 / (56000 + 125000) = 2.279V
+        let rs_target = 0.25 * 500_000.0; // 125kΩ
+        let v_adc = 3.3 * rs_target / (56_000.0 + rs_target);
         let ratio = voltage_to_rs_r0(v_adc, 3.3, 56_000.0, 500_000.0).unwrap();
         let reading = ChannelReading {
             red: ratio,
