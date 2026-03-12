@@ -1,0 +1,18 @@
+[package]
+name = "mics-6814"
+version = "0.1.0"
+edition = "2021"
+description = "Platform-agnostic driver for the MiCS-6814 triple gas sensor (CO, NO2, NH3)"
+license = "MIT OR Apache-2.0"
+categories = ["embedded", "no-std", "hardware-support"]
+keywords = ["mics-6814", "gas-sensor", "embedded-hal", "air-quality"]
+repository = "https://github.com/patkepa/mics-6814"
+readme = "README.md"
+
+[dependencies]
+libm = "0.2"
+defmt = { version = "0.3", optional = true }
+
+[features]
+default = []
+defmt-03 = ["dep:defmt"]
